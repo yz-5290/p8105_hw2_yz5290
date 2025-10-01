@@ -14,7 +14,7 @@ library(readxl)
 ```{r}
 ##lclean pol data
 pol_df=
-  read_csv("data/pols-month.csv")|>
+  read_csv("data/pols-month.csv", na = c("NA", ".", ""))|>
   separate(mon, into = c("year","month","day"),convert=TRUE)|>
   mutate(month = month.name[month],
     president = ifelse(prez_gop == 1, "gop", "dem")
@@ -26,13 +26,198 @@ pol_df
 ```{r}
 ##clean snp data
 snp_df=
-  read_csv("data/snp.csv") |>
-  separate(date,into=c("month","day","year"), convert =TRUE)|>
+  read_csv("data/snp.csv", na = c("NA", ".", "")) |>
+  separate(date, into = c("month", "day", "year"), sep = "/", convert = TRUE) |>
+  mutate( year = ifelse(year >= 50, 1900 + year, 2000 + year),
+    month = month.name[month] ) |>
+  select(year, month, close) |>
+  arrange(year, match(month, month.name))
+snp_df
+```
+```{r}
+##clean unemployment
+une_df=
+  read_csv("data/unemployment.csv", na = c("NA", ".", ","))|>
+  pivot_longer(
+    cols = -Year,
+    names_to = "month",
+    values_to = "unemployment"
+  ) |>
+  mutate(month = str_to_title(month))|>
+  rename(year = Year)
+
+
+```
+```{r}
+merged_df=pol_df |>
+  left_join(snp_df, by= c("year", "month"))|>
+  left_join(une_df, by= c("year", "month"))
+
+merged_df
+```
+Write a short paragraph about these datasets. Explain briefly what each dataset contained, and describe the resulting dataset (e.g. give the dimension, range of years, and names of key variables).
+#conclusion
+The pols original dataset contain the president sitting group from 1947 to 2015. the time is variable "mon" -- 1947-01-15. In the merged dataset, the president is described as gop or dem. 
+The snp dataset contains closing values of s and p from 1950 to 2015. The time is "date" and the example is "7/1/15". In the merged date, the number of closing value is NA until january 1950. 
+The original unemployment dataset reports the monthly unemployment rate from 1948 to 2015. year and each month are variables.
+In the merging dataset, the resulting dataset combines president sitting group, stock market performance, and unemployment trends into one table. It spans the years 1947 to 2015, has about 822 rows (months), and includes key variables such as year, month, president, gov_gop, close, and unemployment. The bumber of rows is depend on the pol data because it's a left merge. 
+
+#p2
+```{r}
+mr_df= 
+  read_excel("data/trash.xlsx", sheet = "mr", skip = 1)|>
+  janitor::clean_names()|>
+  filter(!is.na(dumpster))|>
   mutate(
     year = as.numeric(year),
-    month = as.numeric(month)
-  ) %>%
-  arrange(year, month) %>%
-  select(year, month, everything(), -day)
+    sports_balls = as.integer(round(sports_balls)),
+    trash_wheel = "mr"
+  )|>
+  select(-homes_powered,-x15, -x16)
+
+
+professor_df= read_excel("data/trash.xlsx", sheet = "professor", skip = 1)|>
+  janitor::clean_names()|>
+  filter(!is.na(dumpster))|>
+  mutate(
+    year = as.numeric(year),
+    trash_wheel = "professor")|>
+  select(-homes_powered)|>
+  mutate(sports_balls = NA_integer_)
+
+gwynns_df= read_excel("data/trash.xlsx", sheet = "gwynns", skip = 1)|>
+  janitor::clean_names()|>
+  filter(!is.na(dumpster))|>
+  mutate(
+    year = as.numeric(year),
+    trash_wheel = "gwynns")|>
+  select(-homes_powered)|>
+  mutate(sports_balls = NA_integer_)
 ```
+```{r}
+mr_df
+professor_df
+gwynns_df
+```
+
+
+
+
+```{r}
+trash_combined= bind_rows(mr_df, professor_df, gwynns_df)|> 
+  select(trash_wheel, everything())
+
+trash_combined
+
+```
+```{r}
+professor_total_weight <- professor %>%   
+  summarize(total_weight = sum(weight_tons, na.rm = TRUE))|>
+  pull(total_weight)                   
+gwynns_cigarettes = gwynns|>        
+  filter(year == 2022, month == "June") |> 
+  summarize(total_ciga = sum(cigarette_butts, na.rm = TRUE)) |> 
+  pull(total_ciga)   
+
+```
+
+##conclusion:
+This analysis merge trash collection data from three trash data sets: Mr. Trash Wheel, Professor Trash Wheel, and Gwynnds. The resulting dataset contains 1188 observations. Key variables are different trash names like cigarettes butt, plastic bottole, dates, and weight of trashes. Professor Trash Wheel collected a total of 282.26 tons of trash.In June 2022, Gwynnda collected 18,120 cigarette butts.
+
+#p3
+```{r}
+zip_codes=
+  read_csv("data/Zip_Codes.csv", na = c("NA", ".", ""))|>
+  janitor::clean_names()|>
+  select(zip_code, county, neighborhood)|>
+  distinct(zip_code, .keep_all = TRUE)|>
+  mutate(zip_code = as.character(zip_code))
+zip_codes
+
+zillow_rent=
+  read_csv("data/Zip_zori_uc_sfrcondomfr_sm_month_NYC.csv", na = c("NA", ".", ""))|>
+  janitor::clean_names()
+zillow_rent
+```
+
+```{r}
+#zillow rent data manipulation
+zillow_new = 
+  zillow_rent |>
+  select(region_id, size_rank, region_name, region_type, 
+         state_name, state, city, metro, county_name,
+         x2015_01_31:x2024_08_31) |>
+  pivot_longer(
+    cols = x2015_01_31:x2024_08_31,
+    names_to = "date_str",
+    values_to = "rent_price"
+  ) |>
+  mutate(
+    date_str_clean = str_remove(date_str, "^x") |> str_replace_all("_", "-"),
+    date = as.Date(date_str_clean, format = "%Y-%m-%d"),
+    zip_code = as.character(region_name)
+  ) |>
+  select(-date_str, -date_str_clean, -region_name)
+zillow_new
+
+
+```
+
+
+```{r}
+final_data = zillow_new|>
+  left_join(zip_codes, by = "zip_code")
+
+final_data = final_data |>
+  select(zip_code, county, neighborhood, date, rent_price, everything()) %>%
+  arrange(zip_code, date)
+final_data
+```
+
+```{r}
+unique_zip_codes=n_distinct(final_data$zip_code)
+unique_neighborhood=n_distinct(final_data$neighborhood)
+
+missing_zips=zip_codes|>
+  anti_join(zillow_new, by = "zip_code")|>
+  select(zip_code, county, neighborhood)
+print(missing_zips)
+```
+the resulting tidy dataset has 17284 observations based on different zip code. There are 149 unique zipcodes and there are 43 distinct neighborhood. There are 171 missing zipcodes like 10464 and 10474. Probably these areas are lack of enough rental price data or this area is a unique area like univeristy campus; thus the housing in the univeristy area is not for rental, which can not provide data for zillow. 
+Rental prices fluctuated dramatically during the COVID-19 pandemic. For all available ZIP codes, compare rental prices in January 2021 to prices in January 2020. Make a table that shows the 10 ZIP codes (along with the borough and neighborhood) with largest drop in price from January 2020 to 2021. Comment.
+```{r}
+rent_changes = 
+  final_data |>
+  filter(date %in% as.Date(c("2020-01-31", "2021-01-31"))) |>
+  select(zip_code, county, neighborhood, date, rent_price) |>
+  pivot_wider(
+    names_from = date,
+    values_from = rent_price
+  ) |>
+  rename(
+    rent_2020 = `2020-01-31`,
+    rent_2021 = `2021-01-31`
+  ) |>
+  mutate(
+    rent_change = rent_2021 - rent_2020,
+    percent_change = (rent_2021 - rent_2020) / rent_2020
+  ) |>
+  filter(!is.na(rent_change) & !is.na(rent_2020) & !is.na(rent_2021))
+
+# the top 10 zip code with largest drop:1007, 10069,10009,10016,10001,10002,10004,10038,10012,10010
+top_drops=rent_changes|>
+  arrange(rent_change)|>
+  head(10)|>
+  select(zip_code, county, neighborhood, 
+         rent_2020, rent_2021, rent_change, percent_change)
+print(top_drops)
+```
+
+
+
+
+
+
+
+
 
