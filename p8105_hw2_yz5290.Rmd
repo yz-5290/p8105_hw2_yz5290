@@ -5,6 +5,34 @@ date: "2025-09-30"
 ---
 
 ```{r}
+library(tidyverse)
+library(haven)
+library(readxl)
+```
 
+#Problem1
+```{r}
+##lclean pol data
+pol_df=
+  read_csv("data/pols-month.csv")|>
+  separate(mon, into = c("year","month","day"),convert=TRUE)|>
+  mutate(month = month.name[month],
+    president = ifelse(prez_gop == 1, "gop", "dem")
+  ) |>
+  select(-prez_gop, -prez_dem, -day)
+pol_df
+
+```
+```{r}
+##clean snp data
+snp_df=
+  read_csv("data/snp.csv") |>
+  separate(date,into=c("month","day","year"), convert =TRUE)|>
+  mutate(
+    year = as.numeric(year),
+    month = as.numeric(month)
+  ) %>%
+  arrange(year, month) %>%
+  select(year, month, everything(), -day)
 ```
 
